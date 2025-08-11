@@ -87,15 +87,21 @@ void encode_rs_8(uint8_t *data, uint8_t *parity, int pad)
 		if(feedback != A0) /* feedback term is non-zero */
 		{
 			for(j = 1; j < NROOTS; j++)
+			{
 				parity[j] ^= ALPHA_TO[mod255(feedback + GENPOLY[NROOTS - j])];
+			}
 		}
 		
 		/* Shift */
 		memmove(&parity[0], &parity[1], sizeof(uint8_t) * (NROOTS - 1));
 		if(feedback != A0)
+		{
 			parity[NROOTS - 1] = ALPHA_TO[mod255(feedback + GENPOLY[0])];
+		}
 		else
+		{
 			parity[NROOTS - 1] = 0;
+		}
 	}
 }
 
@@ -161,7 +167,9 @@ int decode_rs_8(uint8_t *data, int *eras_pos, int no_eras, int pad)
 	}
 	
 	for(i = 0; i < NROOTS + 1; i++)
+	{
 		b[i] = INDEX_OF[lambda[i]];
+	}
 	
 	/*
 	 * Begin Berlekamp-Massey algorithm to determine error+erasure
@@ -194,9 +202,13 @@ int decode_rs_8(uint8_t *data, int *eras_pos, int no_eras, int pad)
 			for(i = 0; i < NROOTS; i++)
 			{
 				if(b[i] != A0)
+				{
 					t[i + 1] = lambda[i + 1] ^ ALPHA_TO[MODNN(discr_r + b[i])];
+				}
 				else
+				{
 					t[i + 1] = lambda[i + 1];
+				}
 			}
 			
 			if(2 * el <= r + no_eras - 1)
@@ -207,7 +219,9 @@ int decode_rs_8(uint8_t *data, int *eras_pos, int no_eras, int pad)
 				 * lambda(x)
 				 */
 				for(i = 0; i <= NROOTS; i++)
+				{
 					b[i] = (lambda[i] == 0) ? A0 : MODNN(INDEX_OF[lambda[i]] - discr_r + NN);
+				}
 			}
 			else
 			{
@@ -275,7 +289,9 @@ int decode_rs_8(uint8_t *data, int *eras_pos, int no_eras, int pad)
 		for(j = i; j >= 0; j--)
 		{
 			if((s[i - j] != A0) && (lambda[j] != A0))
+			{
 				tmp ^= ALPHA_TO[MODNN(s[i - j] + lambda[j])];
+			}
 		}
 		omega[i] = INDEX_OF[tmp];
 	}
