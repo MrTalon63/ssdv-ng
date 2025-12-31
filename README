@@ -9,9 +9,10 @@ Uses the Reed-Solomon codec written by Phil Karn, KA9Q.
 
 NOTICE
 
-The GitHub repository at https://github.com/fsphil/ssdv is being removed
-at the end of 2025. The new location is: https://codeberg.org/fsphil/ssdv
-Both repositories will be kept in sync until then.
+The GitHub repository at https://github.com/fsphil/ssdv has been archived
+and is no longer being updated. The new location is at:
+
+https://codeberg.org/fsphil/ssdv
 
 ENCODING
 
