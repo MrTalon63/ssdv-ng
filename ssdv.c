@@ -305,6 +305,24 @@ static char ssdv_set_packet_huffman_profile(ssdv_t *s, uint8_t profile, char dst
 	return(SSDV_OK);
 }
 
+/*
+ * Flags byte layout is rhqqqexx (bit 7..0):
+ * - r is reserved (should be 0)
+ * - h is Huffman profile at bit 6
+ * - qqq is quality level at bits 5..3
+ * - e is EOI flag at bit 2 (1 = last packet of image)
+ * - xx is subsampling mode (0 = 2x2, 1 = 1x2, 2 = 2x1, 3 = 1x1)
+ */
+static uint8_t ssdv_packet_huff_profile(uint8_t flags)
+{
+	uint8_t profile;
+
+	profile = (flags >> 6) & 1;
+	if(profile == 0 && ((flags >> 7) & 1)) profile = 1;
+
+	return(profile);
+}
+
 char ssdv_set_huffman_profile(ssdv_t *s, uint8_t profile)
 {
 	/* Must be called after ssdv_enc_init() or ssdv_dec_init() */
@@ -819,7 +837,7 @@ static char ssdv_have_marker(ssdv_t *s)
 static char ssdv_have_marker_data(ssdv_t *s)
 {
 	uint8_t *d = s->marker_data;
-	ssize_t l = s->marker_len;
+	int32_t l = s->marker_len;
 	int i;
 	
 	switch(s->marker)
@@ -1158,7 +1176,7 @@ char ssdv_enc_get_packet(ssdv_t *s)
 				}
 				
 				/* A packet is ready, create the headers */
-				s->out[0]   = 0x55;                /* Sync */
+				s->out[0]   = SSDV_PKT_SYNC;       /* Sync */
 				s->out[1]   = 0x66 + s->type;      /* Type */
 				s->out[2]   = s->callsign >> 24;
 				s->out[3]   = s->callsign >> 16;
@@ -1172,7 +1190,7 @@ char ssdv_enc_get_packet(ssdv_t *s)
 				s->out[11]  = s->width >> 4;               /* Width / 16 */
 				s->out[12]  = s->height >> 4;              /* Height / 16 */
 				s->out[13]  = 0x00;
-				s->out[13] |= (s->huff_profile & 1) << 7;       /* Huffman profile */
+				s->out[13] |= (s->huff_profile & 1) << 6;       /* Huffman profile */
 				s->out[13] |= ((s->quality - 4) & 7) << 3;  /* Quality level */
 				s->out[13] |= (r == SSDV_EOI ? 1 : 0) << 2; /* EOI flag (1 bit) */
 				s->out[13] |= s->mcu_mode & 0x03;           /* MCU mode (2 bits) */
@@ -1386,7 +1404,7 @@ char ssdv_dec_feed(ssdv_t *s, uint8_t *packet)
 		s->width     = packet[11] << 4;
 		s->height    = packet[12] << 4;
 		s->mcu_count = packet[11] * packet[12];
-		s->huff_profile = (packet[13] >> 7) & 1;
+		s->huff_profile = ssdv_packet_huff_profile(packet[13]);
 		s->quality   = ((packet[13] >> 3) & 7) ^ 4;
 		s->mcu_mode  = packet[13] & 0x03;
 		
@@ -1532,7 +1550,7 @@ char ssdv_dec_is_packet(uint8_t *packet, int pkt_size, int *errors)
 	
 	/* Testing is destructive, work on a copy */
 	memcpy(pkt, packet, pkt_size);
-	pkt[0] = 0x55;
+	pkt[0] = SSDV_PKT_SYNC;
 	
 	type = SSDV_TYPE_INVALID;
 	
@@ -1631,7 +1649,7 @@ void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet)
 	info->packet_id  = (packet[8] << 16) | (packet[9] << 8) | packet[10];
 	info->width      = packet[11] << 4;
 	info->height     = packet[12] << 4;
-	info->huff_profile = (packet[13] >> 7) & 1;
+	info->huff_profile = ssdv_packet_huff_profile(packet[13]);
 	info->eoi        = (packet[13] >> 2) & 1;
 	info->quality    = ((packet[13] >> 3) & 7) ^ 4;
 	info->mcu_mode   = packet[13] & 0x03;

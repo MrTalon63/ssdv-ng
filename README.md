@@ -29,21 +29,21 @@ Original packet structure can be found here: https://ukhas.org.uk/doku.php?id=gu
 
 Current packet header and trailer layout:
 
-| Byte offset              | Size (bytes) | Field               | Encoding / notes                                                                                                                                  |
-| ------------------------ | -----------: | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0                        |            1 | Sync                | 0x55                                                                                                                                              |
-| 1                        |            1 | Packet type         | 0x66 + type                                                                                                                                       |
-| 2-5                      |            4 | Callsign            | Base-40 encoded callsign. Up to 6 digits                                                                                                          |
-| 6-7                      |            2 | Image ID            | Big-endian (MSB, LSB)                                                                                                                             |
-| 8-10                     |            3 | Packet ID           | Big-endian (MSB, MID, LSB)                                                                                                                        |
-| 11                       |            1 | Width               | width / 16                                                                                                                                        |
-| 12                       |            1 | Height              | height / 16                                                                                                                                       |
-| 13                       |            1 | Flags               | hqqqexx: h = Huffman profile (0 = standard, 1 = low-entropy optimized), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling mode |
-| 14                       |            1 | MCU offset          | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFF if none present                                                   |
-| 15-17                    |            3 | MCU index (MCU ID)  | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                                    |
-| 18...                    |     variable | Payload             | Depends on total packet size and type                                                                                                             |
-| after payload            |            4 | CRC32               | 32-bit CRC                                                                                                                                        |
-| final (normal mode only) |           32 | Reed-Solomon parity | Present only for normal/FEC packets                                                                                                               |
+| Byte offset              | Size (bytes) | Field               | Encoding / notes                                                                                                                                                 |
+| ------------------------ | -----------: | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0                        |            1 | Sync                | 0xD3 (11010011)                                                                                                                                                  |
+| 1                        |            1 | Packet type         | 0x66 + type                                                                                                                                                      |
+| 2-5                      |            4 | Callsign            | Base-40 encoded callsign. Up to 6 digits                                                                                                                         |
+| 6-7                      |            2 | Image ID            | Big-endian (MSB, LSB)                                                                                                                                            |
+| 8-10                     |            3 | Packet ID           | Big-endian (MSB, MID, LSB)                                                                                                                                       |
+| 11                       |            1 | Width               | width / 16                                                                                                                                                       |
+| 12                       |            1 | Height              | height / 16                                                                                                                                                      |
+| 13                       |            1 | Flags               | rhqqqexx: r = reserved, h = Huffman profile (0 = standard, 1 = low-entropy optimized), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling mode |
+| 14                       |            1 | MCU offset          | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFF if none present                                                                  |
+| 15-17                    |            3 | MCU index (MCU ID)  | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                                                   |
+| 18...                    |     variable | Payload             | Depends on total packet size and type                                                                                                                            |
+| after payload            |            4 | CRC32               | 32-bit CRC                                                                                                                                                       |
+| final (normal mode only) |           32 | Reed-Solomon parity | Present only for normal/FEC packets                                                                                                                              |
 
 For total packet length up to 256 bytes:
 

@@ -19,8 +19,87 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#else
+char *optarg;
+int optind = 1;
+int opterr = 1;
+int optopt;
+
+/* Minimal getopt() compatibility for Windows/MSVC builds. */
+static int getopt(int argc, char * const argv[], const char *optstring)
+{
+	static int nextchar = 1;
+	char *arg;
+	const char *opt;
+	char c;
+
+	if(optind >= argc) return(-1);
+
+	arg = argv[optind];
+	if(nextchar == 1)
+	{
+		if(arg[0] != '-' || arg[1] == '\0') return(-1);
+		if(arg[1] == '-' && arg[2] == '\0')
+		{
+			optind++;
+			return(-1);
+		}
+	}
+
+	c = arg[nextchar++];
+	opt = strchr(optstring, c);
+
+	if(!opt)
+	{
+		optopt = c;
+		if(opterr) fprintf(stderr, "Unknown option: -%c\n", c);
+		if(arg[nextchar] == '\0')
+		{
+			nextchar = 1;
+			optind++;
+		}
+		return('?');
+	}
+
+	if(opt[1] == ':')
+	{
+		if(arg[nextchar] != '\0')
+		{
+			optarg = &arg[nextchar];
+			nextchar = 1;
+			optind++;
+		}
+		else if(optind + 1 < argc)
+		{
+			optarg = argv[optind + 1];
+			nextchar = 1;
+			optind += 2;
+		}
+		else
+		{
+			optopt = c;
+			if(opterr) fprintf(stderr, "Option -%c requires an argument\n", c);
+			nextchar = 1;
+			optind++;
+			return('?');
+		}
+	}
+	else
+	{
+		optarg = NULL;
+		if(arg[nextchar] == '\0')
+		{
+			nextchar = 1;
+			optind++;
+		}
+	}
+
+	return(c);
+}
+#endif
 #include "ssdv.h"
 
 void exit_usage()
