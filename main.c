@@ -102,6 +102,82 @@ static int getopt(int argc, char * const argv[], const char *optstring)
 #endif
 #include "ssdv.h"
 
+static int build_output_path(char *path, size_t path_len, const char *base_path, int image_index)
+{
+	const char *dot, *sep;
+
+	if(image_index <= 1)
+	{
+		if(snprintf(path, path_len, "%s", base_path) >= (int) path_len) return(-1);
+		return(0);
+	}
+
+	sep = strrchr(base_path, '/');
+#ifdef _WIN32
+	{
+		const char *sep2 = strrchr(base_path, '\\');
+		if(sep2 && (!sep || sep2 > sep)) sep = sep2;
+	}
+#endif
+	dot = strrchr(base_path, '.');
+	if(dot && sep && dot < sep) dot = NULL;
+
+	if(dot)
+	{
+		if(snprintf(path, path_len, "%.*s_%d%s", (int) (dot - base_path), base_path, image_index, dot) >= (int) path_len) return(-1);
+	}
+	else
+	{
+		if(snprintf(path, path_len, "%s_%d", base_path, image_index) >= (int) path_len) return(-1);
+	}
+
+	return(0);
+}
+
+static int write_decoded_image(ssdv_t *ssdv, uint8_t **jpeg, size_t *jpeg_length, const char *base_output_path, int image_index, FILE *stdout_fallback)
+{
+	FILE *f = stdout_fallback;
+	char path[1024];
+
+	ssdv_dec_get_jpeg(ssdv, jpeg, jpeg_length);
+
+	if(base_output_path)
+	{
+		if(build_output_path(path, sizeof(path), base_output_path, image_index) < 0)
+		{
+			fprintf(stderr, "Output path is too long\n");
+			return(-1);
+		}
+
+		f = fopen(path, "wb");
+		if(!f)
+		{
+			fprintf(stderr, "Error opening '%s' for output:\n", path);
+			perror("fopen");
+			return(-1);
+		}
+	}
+
+	if(fwrite(*jpeg, 1, *jpeg_length, f) != *jpeg_length)
+	{
+		fprintf(stderr, "Error writing decoded image data\n");
+		if(base_output_path) fclose(f);
+		return(-1);
+	}
+
+	if(base_output_path)
+	{
+		fclose(f);
+		fprintf(stderr, "Wrote image %d to '%s' (%lu bytes)\n", image_index, path, (unsigned long) *jpeg_length);
+	}
+	else
+	{
+		fflush(f);
+	}
+
+	return(0);
+}
+
 void exit_usage()
 {
 	fprintf(stderr,
@@ -133,6 +209,9 @@ int main(int argc, char *argv[])
 	int c, i;
 	FILE *fin = stdin;
 	FILE *fout = stdout;
+	const char *in_path = NULL;
+	const char *out_path = NULL;
+	const char *decode_output_base = NULL;
 	char encode = -1;
 	char type = SSDV_TYPE_NORMAL;
 	int droptest = 0;
@@ -182,35 +261,56 @@ int main(int argc, char *argv[])
 	
 	for(i = 0; i < c; i++)
 	{
-		if(!strcmp(argv[optind + i], "-")) continue;
-		
 		switch(i)
 		{
 		case 0:
-			fin = fopen(argv[optind + i], "rb");
-			if(!fin)
-			{
-				fprintf(stderr, "Error opening '%s' for input:\n", argv[optind + i]);
-				perror("fopen");
-				return(-1);
-			}
+			in_path = argv[optind + i];
 			break;
 		
 		case 1:
-			fout = fopen(argv[optind + i], "wb");
-			if(!fout)         
-			{                 
-				fprintf(stderr, "Error opening '%s' for output:\n", argv[optind + i]);
-				perror("fopen");        
-				return(-1);
-			}
+			out_path = argv[optind + i];
 			break;
 		}
+	}
+
+	if(in_path && strcmp(in_path, "-"))
+	{
+		fin = fopen(in_path, "rb");
+		if(!fin)
+		{
+			fprintf(stderr, "Error opening '%s' for input:\n", in_path);
+			perror("fopen");
+			return(-1);
+		}
+	}
+
+	if(encode == 1)
+	{
+		if(out_path && strcmp(out_path, "-"))
+		{
+			fout = fopen(out_path, "wb");
+			if(!fout)
+			{
+				fprintf(stderr, "Error opening '%s' for output:\n", out_path);
+				perror("fopen");
+				if(fin != stdin) fclose(fin);
+				return(-1);
+			}
+		}
+	}
+	else if(encode == 0)
+	{
+		if(out_path && strcmp(out_path, "-")) decode_output_base = out_path;
 	}
 	
 	switch(encode)
 	{
 	case 0: /* Decode */
+	{
+		int packets_total = 0;
+		int packets_in_image = 0;
+		int images_written = 0;
+		int warned_stdout_multi = 0;
 		
 		if(droptest > 0) fprintf(stderr, "*** NOTE: Drop test enabled: %i ***\n", droptest);
 		
@@ -221,11 +321,18 @@ int main(int argc, char *argv[])
 		
 		jpeg_length = 1024 * 1024 * 4;
 		jpeg = malloc(jpeg_length);
+		if(!jpeg)
+		{
+			fprintf(stderr, "Failed to allocate decode buffer\n");
+			return(-1);
+		}
 		ssdv_dec_set_buffer(&ssdv, jpeg, jpeg_length);
 		
-		i = 0;
 		while(fread(pkt, pkt_length, 1, fin) > 0)
 		{
+			ssdv_packet_info_t p;
+			int feed_result;
+
 			/* Drop % of packets */
 			if(droptest && (rand() / (RAND_MAX / 100) < droptest)) continue;
 			
@@ -246,17 +353,45 @@ int main(int argc, char *argv[])
 			
 			/* No valid packet was found before EOF */
 			if(c != 0) break;
+
+			ssdv_dec_header(&p, pkt);
+
+			/* New image start: flush and reset the previous image decoder state */
+			if(p.packet_id == 0 && packets_in_image > 0)
+			{
+				images_written++;
+				if(!decode_output_base && images_written > 1 && !warned_stdout_multi)
+				{
+					fprintf(stderr, "Warning: multiple images detected while writing to stdout; JPEG data is concatenated.\n");
+					warned_stdout_multi = 1;
+				}
+
+				if(write_decoded_image(&ssdv, &jpeg, &jpeg_length, decode_output_base, images_written, fout) < 0)
+				{
+					free(jpeg);
+					if(fin != stdin) fclose(fin);
+					if(fout != stdout) fclose(fout);
+					return(-1);
+				}
+
+				if(ssdv_dec_init(&ssdv, pkt_length) != SSDV_OK)
+				{
+					free(jpeg);
+					if(fin != stdin) fclose(fin);
+					if(fout != stdout) fclose(fout);
+					return(-1);
+				}
+				ssdv_dec_set_buffer(&ssdv, jpeg, jpeg_length);
+				packets_in_image = 0;
+			}
 			
 			if(verbose)
 			{
-				ssdv_packet_info_t p;
-				
 				if(skipped > 0)
 				{
 					fprintf(stderr, "Skipped %d bytes.\n", skipped);
 				}
-				
-				ssdv_dec_header(&p, pkt);
+
 				fprintf(stderr, "Decoded image packet. Callsign: \"%s\", Image ID: %u, Resolution: %dx%d, Packet ID: %lu (%d errors corrected)\n"
 				                ">> Type: %d, Quality: %d, Huffman profile: %d, EOI: %d, MCU Mode: %d, MCU Offset: %d, MCU ID: %lu/%lu\n",
 					p.callsign_s,
@@ -277,17 +412,71 @@ int main(int argc, char *argv[])
 			}
 			
 			/* Feed it to the decoder */
-			ssdv_dec_feed(&ssdv, pkt);
-			i++;
+			feed_result = ssdv_dec_feed(&ssdv, pkt);
+			packets_in_image++;
+			packets_total++;
+
+			if(feed_result == SSDV_OK)
+			{
+				images_written++;
+				if(!decode_output_base && images_written > 1 && !warned_stdout_multi)
+				{
+					fprintf(stderr, "Warning: multiple images detected while writing to stdout; JPEG data is concatenated.\n");
+					warned_stdout_multi = 1;
+				}
+
+				if(write_decoded_image(&ssdv, &jpeg, &jpeg_length, decode_output_base, images_written, fout) < 0)
+				{
+					free(jpeg);
+					if(fin != stdin) fclose(fin);
+					if(fout != stdout) fclose(fout);
+					return(-1);
+				}
+
+				if(ssdv_dec_init(&ssdv, pkt_length) != SSDV_OK)
+				{
+					free(jpeg);
+					if(fin != stdin) fclose(fin);
+					if(fout != stdout) fclose(fout);
+					return(-1);
+				}
+				ssdv_dec_set_buffer(&ssdv, jpeg, jpeg_length);
+				packets_in_image = 0;
+			}
+			else if(feed_result == SSDV_ERROR)
+			{
+				free(jpeg);
+				if(fin != stdin) fclose(fin);
+				if(fout != stdout) fclose(fout);
+				return(-1);
+			}
 		}
-		
-		ssdv_dec_get_jpeg(&ssdv, &jpeg, &jpeg_length);
-		fwrite(jpeg, 1, jpeg_length, fout);
+
+		if(packets_in_image > 0)
+		{
+			images_written++;
+			if(!decode_output_base && images_written > 1 && !warned_stdout_multi)
+			{
+				fprintf(stderr, "Warning: multiple images detected while writing to stdout; JPEG data is concatenated.\n");
+				warned_stdout_multi = 1;
+			}
+
+			if(write_decoded_image(&ssdv, &jpeg, &jpeg_length, decode_output_base, images_written, fout) < 0)
+			{
+				free(jpeg);
+				if(fin != stdin) fclose(fin);
+				if(fout != stdout) fclose(fout);
+				return(-1);
+			}
+		}
+
 		free(jpeg);
 		
-		fprintf(stderr, "Read %i packets\n", i);
+		fprintf(stderr, "Read %i packets\n", packets_total);
+		fprintf(stderr, "Decoded %i image%s\n", images_written, images_written == 1 ? "" : "s");
 		
 		break;
+	}
 	
 	case 1: /* Encode */
 		
