@@ -346,15 +346,26 @@ int main(int argc, char *argv[])
 			
 			/* Test the packet is valid */
 			skipped = 0;
-			while((c = ssdv_dec_is_packet(pkt, pkt_length, &errors)) != 0)
+			while(1)
 			{
+				if(pkt[0] == SSDV_PKT_SYNC || pkt[1] == 0x66 + SSDV_TYPE_NORMAL || pkt[1] == 0x66 + SSDV_TYPE_NOFEC)
+				{
+					if((c = ssdv_dec_is_packet(pkt, pkt_length, &errors)) == 0)
+					{
+						break;
+					}
+				}
+
 				/* Read 1 byte at a time until a new packet is found */
 				memmove(&pkt[0], &pkt[1], pkt_length - 1);
 				
-				if(fread(&pkt[pkt_length - 1], 1, 1, fin) <= 0)
+				int next_byte = fgetc(fin);
+				if(next_byte == EOF)
 				{
+					c = -1;
 					break;
 				}
+				pkt[pkt_length - 1] = (uint8_t)next_byte;
 				
 				skipped++;
 			}
@@ -545,4 +556,3 @@ int main(int argc, char *argv[])
 	
 	return(0);
 }
-
