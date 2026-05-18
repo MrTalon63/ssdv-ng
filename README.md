@@ -21,7 +21,9 @@ Prints the current binary version and exits.
 
 #### ENCODING
 
-`ssdv -e -c TEST01 -i ID input.jpeg output.bin`
+```bash
+ssdv -e -c TEST01 -i ID input.jpeg output.bin
+```
 
 This encodes the `input.jpeg` image file into SSDV packets stored in the `output.bin` file. TEST01 (the callsign, an alphanumeric string up to 6 characters) and ID (a number from 0-65535) are encoded into the header of each packet. The ID should be changed for each new image transmitted to allow the decoder to identify when a new image begins.
 
@@ -37,27 +39,27 @@ Original packet structure can be found here: https://ukhas.org.uk/doku.php?id=gu
 
 Current packet header and trailer layout:
 
-| Byte offset              | Size (bytes) | Field               | Encoding / notes                                                                                                                                              |
-| ------------------------ | -----------: | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0                        |            1 | Sync                | 0xD3 (11010011)                                                                                                                                               |
-| 1-4                      |            4 | Callsign            | Base-40 encoded callsign. Up to 6 digits                                                                                                                      |
-| 5-6                      |            2 | Image ID            | Big-endian (MSB, LSB)                                                                                                                                         |
-| 7-9                      |            3 | Packet ID           | Big-endian (MSB, MID, LSB)                                                                                                                                    |
-| 10                       |            1 | Width               | width / 16                                                                                                                                                    |
-| 11                       |            1 | Height              | height / 16                                                                                                                                                   |
-| 12                       |            1 | Flags               | thqqqexx: t = type (0 = Normal/FEC, 1 = No-FEC), h = Huffman profile (0 = std, 1 = opt), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling |
-| 13-14                    |            2 | MCU offset          | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFFFF if none present                                                             |
-| 15-17                    |            3 | MCU index (MCU ID)  | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                                                |
-| 18...                    |     variable | Payload             | Depends on total packet size and type                                                                                                                         |
-| after payload            |            4 | CRC32               | 32-bit CRC                                                                                                                                                    |
-| final (normal mode only) |           32 | Reed-Solomon parity | Present only for normal/FEC packets                                                                                                                           |
+| Byte offset              | Size (bytes) | Type        | Field               | Encoding / notes                                                                                                                                              |
+| ------------------------ | -----------: | ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0                        |            1 | `uint8_t`   | Sync                | 0xD3 (11010011)                                                                                                                                               |
+| 1-4                      |            4 | `uint32_t`  | Callsign            | Base-40 encoded callsign. Up to 6 digits                                                                                                                      |
+| 5-6                      |            2 | `uint16_t`  | Image ID            | Big-endian (MSB, LSB)                                                                                                                                         |
+| 7-9                      |            3 | `uint32_t`  | Packet ID           | Big-endian (MSB, MID, LSB)                                                                                                                                    |
+| 10                       |            1 | `uint8_t`   | Width               | width / 16                                                                                                                                                    |
+| 11                       |            1 | `uint8_t`   | Height              | height / 16                                                                                                                                                   |
+| 12                       |            1 | `uint8_t`   | Flags               | thqqqexx: t = type (0 = Normal/FEC, 1 = No-FEC), h = Huffman profile (0 = std, 1 = opt), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling |
+| 13-14                    |            2 | `uint16_t`  | MCU offset          | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFFFF if none present                                                             |
+| 15-17                    |            3 | `uint32_t`  | MCU index (MCU ID)  | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                                                |
+| 18...                    |     variable | `uint8_t[]` | Payload             | Depends on total packet size and type                                                                                                                         |
+| after payload            |            4 | `uint32_t`  | CRC32               | 32-bit CRC                                                                                                                                                    |
+| final (normal mode only) |           32 | `uint8_t[]` | Reed-Solomon parity | Present only for normal/FEC packets                                                                                                                           |
 
 Packet length constraints:
 
-- Normal/FEC mode is strictly limited to a maximum packet size of 256 bytes due to the Reed-Solomon (GF(256)) implementation.
-    - Normal/FEC: header(18) + payload + crc(4) + rs(32) = pkt_size
-- No-FEC mode (`-n`) supports larger packet sizes (e.g. `-l 512`).
-    - No-FEC: header(18) + payload + crc(4) = pkt_size
+| Mode              | Max Size                             | Formula                                           |
+| ----------------- | ------------------------------------ | ------------------------------------------------- |
+| **Normal/FEC**    | Strictly 256 bytes (GF(256) limit)   | header(18) + payload + crc(4) + rs(32) = pkt_size |
+| **No-FEC** (`-n`) | Variable (supports larger e.g., 512) | header(18) + payload + crc(4) = pkt_size          |
 
 ##### CCSDS Mode
 
@@ -65,7 +67,9 @@ When encoding with the `-C` option, the packet structure is modified to fit with
 
 #### DECODING
 
-`ssdv -d input.bin output.jpeg`
+```bash
+ssdv -d input.bin output.jpeg
+```
 
 This decodes a file `input.bin` containing a series of SSDV packets into the JPEG file `output.jpeg`.
 

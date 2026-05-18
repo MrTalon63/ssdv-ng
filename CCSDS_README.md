@@ -90,18 +90,16 @@ The modified `main.c` automatically detects packet size and handles both standar
 
 ## Packet Header Layout
 
-```
-Offset  Size  Field
-------  ----  -----
-0       2     Image ID
-2       3     Packet ID
-5       1     Width (in 16-pixel units)
-6       1     Height (in 16-pixel units)
-7       1     Flags (huff_profile[1], quality[3], eoi[1], mcu_mode[2])
-8       2     MCU Offset (where this MCU starts in packet payload)
-10      3     MCU ID
-13      233   JPEG Payload Data
-```
+| Byte offset | Size (bytes) | Type        | Field              | Encoding / notes                                                                                                                         |
+| ----------- | -----------: | ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 0-1         |            2 | `uint16_t`  | Image ID           | Big-endian (MSB, LSB)                                                                                                                    |
+| 2-4         |            3 | `uint32_t`  | Packet ID          | Big-endian (MSB, MID, LSB)                                                                                                               |
+| 5           |            1 | `uint8_t`   | Width              | width / 16                                                                                                                               |
+| 6           |            1 | `uint8_t`   | Height             | height / 16                                                                                                                              |
+| 7           |            1 | `uint8_t`   | Flags              | rhqqqexx: r = reserved (0), h = Huffman profile (0 = std, 1 = opt), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling |
+| 8-9         |            2 | `uint16_t`  | MCU offset         | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFFFF if none present                                        |
+| 10-12       |            3 | `uint32_t`  | MCU index (MCU ID) | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                           |
+| 13...       |          233 | `uint8_t[]` | Payload            | JPEG Payload Data                                                                                                                        |
 
 ## Differences from Standard SSDV
 
@@ -118,10 +116,12 @@ Offset  Size  Field
 
 \*CCSDS mode relies on CCSDS packet-level error correction instead
 
-## Notes
+## Limitations
 
+Only JPEG files are supported, with the following limitations:
+
+- Width and height must be a multiple of 16 (up to a resolution of 4080 x 4080)
 - CCSDS packets have no error correction - rely on CCSDS transport layer
-- Image dimensions must be multiples of 16 pixels
-- Maximum image size: 4080×4080 pixels
-- Quality levels 0-7 (higher = better)
 - All packet data must be in order (no reordering/loss tolerance like standard SSDV)
+
+_Note: Quality levels 0-7 are supported (higher = better)._

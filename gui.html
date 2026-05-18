@@ -223,6 +223,7 @@
 					pktLen.placeholder = expectedPlaceholder;
 				}
 				pktLen.disabled = fec === "-C";
+				document.getElementById("callsign").disabled = fec === "-C";
 			}
 
 			function clearHistory() {
@@ -405,22 +406,30 @@
 			function saveSettings() {
 				SETTINGS_KEYS.forEach((key) => {
 					const el = document.getElementById(key);
-					if (el) localStorage.setItem("ssdv_" + key, el.value);
+					if (el) {
+						try {
+							localStorage.setItem("ssdv_" + key, el.value);
+						} catch (e) {}
+					}
 				});
 			}
 
 			function loadSettings() {
 				// Load 'mode' and 'fec' first to setup UI dependencies
 				["mode", "fec"].forEach((key) => {
-					const val = localStorage.getItem("ssdv_" + key);
-					if (val !== null) document.getElementById(key).value = val;
+					try {
+						const val = localStorage.getItem("ssdv_" + key);
+						if (val !== null) document.getElementById(key).value = val;
+					} catch (e) {}
 				});
 				toggleOptions();
 
 				// Load remaining inputs
 				SETTINGS_KEYS.filter((k) => k !== "mode" && k !== "fec").forEach((key) => {
-					const val = localStorage.getItem("ssdv_" + key);
-					if (val !== null) document.getElementById(key).value = val;
+					try {
+						const val = localStorage.getItem("ssdv_" + key);
+						if (val !== null) document.getElementById(key).value = val;
+					} catch (e) {}
 				});
 			}
 
