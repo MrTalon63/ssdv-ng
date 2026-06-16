@@ -50,7 +50,7 @@ extern "C" {
 
 /* CCSDS packet constants (stripped: no sync, callsign, CRC, FEC) */
 #define SSDV_PKT_SIZE_CCSDS         (0xF6)   /* 246 bytes */
-#define SSDV_PKT_SIZE_CCSDS_HEADER  (0x0D)   /* 13 bytes */
+#define SSDV_PKT_SIZE_CCSDS_HEADER  (0x0E)   /* 14 bytes */
 
 /* Packet offsets */
 #define SSDV_OFFSET_SYNC         (0x00)
@@ -68,9 +68,10 @@ extern "C" {
 #define SSDV_CCSDS_OFFSET_PACKET_ID  (0x02)
 #define SSDV_CCSDS_OFFSET_WIDTH      (0x05)
 #define SSDV_CCSDS_OFFSET_HEIGHT     (0x06)
-#define SSDV_CCSDS_OFFSET_FLAGS      (0x07)
-#define SSDV_CCSDS_OFFSET_MCU_OFFSET (0x08)
-#define SSDV_CCSDS_OFFSET_MCU_ID     (0x0A)
+#define SSDV_CCSDS_OFFSET_EXTRA      (0x07)
+#define SSDV_CCSDS_OFFSET_FLAGS      (0x08)
+#define SSDV_CCSDS_OFFSET_MCU_OFFSET (0x09)
+#define SSDV_CCSDS_OFFSET_MCU_ID     (0x0B)
 
 typedef struct
 {

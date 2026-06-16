@@ -870,10 +870,11 @@ static char ssdv_have_marker_data(ssdv_t *s)
 			return(SSDV_ERROR);
 		}
 		
-		/* Maximum image is 4080x4080 */
-		if(s->width > 4080 || s->height > 4080)
+		/* Maximum image is 4080x4080 (or 65520x65520 for CCSDS) */
+		uint32_t max_res = (s->type == SSDV_TYPE_CCSDS) ? 65520 : 4080;
+		if(s->width > max_res || s->height > max_res)
 		{
-			fprintf(stderr, "Error: The image is too big. Maximum resolution is 4080x4080\n");
+			fprintf(stderr, "Error: The image is too big. Maximum resolution is %ux%u\n", max_res, max_res);
 			return(SSDV_ERROR);
 		}
 		
@@ -1197,14 +1198,17 @@ char ssdv_enc_get_packet(ssdv_t *s)
 				/* A packet is ready, create the headers */
 			if(s->type == SSDV_TYPE_CCSDS)
 			{
-				/* CCSDS packet format: 13-byte header, no sync/CRC/RS */
+				/* CCSDS packet format: 14-byte header, no sync/CRC/RS */
+				uint16_t w_val = s->width >> 4;
+				uint16_t h_val = s->height >> 4;
 				s->out[SSDV_CCSDS_OFFSET_IMAGE_ID]       = s->image_id >> 8;             /* Image ID MSB */
 				s->out[SSDV_CCSDS_OFFSET_IMAGE_ID + 1]   = s->image_id & 0xFF;           /* Image ID LSB */
 				s->out[SSDV_CCSDS_OFFSET_PACKET_ID]      = (s->packet_id >> 16) & 0xFF;  /* Packet ID MSB */
 				s->out[SSDV_CCSDS_OFFSET_PACKET_ID + 1]  = (s->packet_id >> 8) & 0xFF;   /* Packet ID MID */
 				s->out[SSDV_CCSDS_OFFSET_PACKET_ID + 2]  = s->packet_id & 0xFF;          /* Packet ID LSB */
-				s->out[SSDV_CCSDS_OFFSET_WIDTH]          = s->width >> 4;                /* Width / 16 */
-				s->out[SSDV_CCSDS_OFFSET_HEIGHT]         = s->height >> 4;               /* Height / 16 */
+				s->out[SSDV_CCSDS_OFFSET_WIDTH]          = w_val >> 4;                   /* Width / 16 high 8 bits */
+				s->out[SSDV_CCSDS_OFFSET_HEIGHT]         = h_val >> 4;                   /* Height / 16 high 8 bits */
+				s->out[SSDV_CCSDS_OFFSET_EXTRA]          = ((w_val & 0x0F) << 4) | (h_val & 0x0F); /* Shared low 4 bits of width and height */
 				s->out[SSDV_CCSDS_OFFSET_FLAGS]          = 0x00;
 				s->out[SSDV_CCSDS_OFFSET_FLAGS]         |= (s->huff_profile & 1) << 6;   /* Huffman profile */
 				s->out[SSDV_CCSDS_OFFSET_FLAGS]         |= ((s->quality - 4) & 7) << 3;  /* Quality level */
@@ -1741,21 +1745,28 @@ void ssdv_dec_header(ssdv_packet_info_t *info, uint8_t *packet, int pkt_size)
 	
 	if(is_ccsds)
 	{
-		/* CCSDS format: 13-byte header, no sync/callsign/CRC */
+		/* CCSDS format: 14-byte header, no sync/callsign/CRC */
 		info->type       = SSDV_TYPE_CCSDS;
 		info->callsign   = 0; /* No callsign in CCSDS mode */
 		info->callsign_s[0] = '\0';
 		info->image_id   = (packet[SSDV_CCSDS_OFFSET_IMAGE_ID] << 8) | packet[SSDV_CCSDS_OFFSET_IMAGE_ID + 1];
 		info->packet_id  = ((uint32_t)packet[SSDV_CCSDS_OFFSET_PACKET_ID] << 16) | ((uint32_t)packet[SSDV_CCSDS_OFFSET_PACKET_ID + 1] << 8) | packet[SSDV_CCSDS_OFFSET_PACKET_ID + 2];
-		info->width      = packet[SSDV_CCSDS_OFFSET_WIDTH] << 4;
-		info->height     = packet[SSDV_CCSDS_OFFSET_HEIGHT] << 4;
+		
+		uint8_t w_hi = packet[SSDV_CCSDS_OFFSET_WIDTH];
+		uint8_t h_hi = packet[SSDV_CCSDS_OFFSET_HEIGHT];
+		uint8_t extra = packet[SSDV_CCSDS_OFFSET_EXTRA];
+		uint16_t w_val = (w_hi << 4) | (extra >> 4);
+		uint16_t h_val = (h_hi << 4) | (extra & 0x0F);
+		info->width      = w_val << 4;
+		info->height     = h_val << 4;
+		
 		info->huff_profile = ssdv_packet_huff_profile(packet[SSDV_CCSDS_OFFSET_FLAGS]);
 		info->eoi        = (packet[SSDV_CCSDS_OFFSET_FLAGS] >> 2) & 1;
 		info->quality    = ((packet[SSDV_CCSDS_OFFSET_FLAGS] >> 3) & 7) ^ 4;
 		info->mcu_mode   = packet[SSDV_CCSDS_OFFSET_FLAGS] & 0x03;
 		info->mcu_offset = (packet[SSDV_CCSDS_OFFSET_MCU_OFFSET] << 8) | packet[SSDV_CCSDS_OFFSET_MCU_OFFSET + 1];
 		info->mcu_id     = ((uint32_t)packet[SSDV_CCSDS_OFFSET_MCU_ID] << 16) | ((uint32_t)packet[SSDV_CCSDS_OFFSET_MCU_ID + 1] << 8) | packet[SSDV_CCSDS_OFFSET_MCU_ID + 2];
-		info->mcu_count  = (uint32_t)packet[SSDV_CCSDS_OFFSET_WIDTH] * (uint32_t)packet[SSDV_CCSDS_OFFSET_HEIGHT];
+		info->mcu_count  = (uint32_t)w_val * (uint32_t)h_val;
 	}
 	else
 	{

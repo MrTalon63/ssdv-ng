@@ -185,11 +185,6 @@
 						<button type="button" class="browse" onclick="pickFile('outFile', true, false)">Browse...</button>
 					</div>
 
-					<label for="udpHost" style="margin-top: 5px">UDP Listen Port / IP</label>
-					<div class="input-group">
-						<input type="text" id="udpHost" placeholder="e.g. 5000 or 224.1.1.1:5000 (For live decoding)" />
-					</div>
-
 					<button id="runBtn" onclick="run()">Execute</button>
 				</div>
 
@@ -278,28 +273,13 @@
 				}
 			}
 
-			let udpIsRunning = false;
-
 			async function run() {
-				if (udpIsRunning) {
-					await window.stop_udp_listen();
-					udpIsRunning = false;
-					document.getElementById("runBtn").innerText = "Execute";
-					document.getElementById("output").innerText += "\nStopped UDP Listener.";
-					return;
-				}
-
 				const mode = document.getElementById("mode").value;
 				const inFile = document.getElementById("inFile").value;
 				const outFile = document.getElementById("outFile").value;
-				const udpHost = document.getElementById("udpHost").value;
 
-				if (!inFile && !udpHost) {
-					document.getElementById("output").innerText = "Error: Input file or UDP port is required.";
-					return;
-				}
-				if (udpHost && mode === "-e") {
-					document.getElementById("output").innerText = "Error: UDP encoding via GUI is not supported yet.";
+				if (!inFile) {
+					document.getElementById("output").innerText = "Error: Input file is required.";
 					return;
 				}
 
@@ -309,14 +289,6 @@
 				const imageId = document.getElementById("imageId").value;
 				const quality = document.getElementById("quality").value;
 				const huffman = document.getElementById("huffman").value;
-
-				if (udpHost && mode === "-d") {
-					udpIsRunning = true;
-					document.getElementById("runBtn").innerText = "Stop Listening";
-					document.getElementById("output").innerText = "Starting UDP Listener on " + udpHost + "...";
-					await window.start_udp_listen(outFile, fec, pktLen, udpHost);
-					return;
-				}
 
 				const files = inFile.split("|");
 				let overallResult = "";
@@ -401,7 +373,7 @@
 			setupDropZone("inFile");
 			setupDropZone("outFile");
 
-			const SETTINGS_KEYS = ["mode", "fec", "pktLen", "callsign", "imageId", "quality", "huffman", "inFile", "outFile", "udpHost"];
+			const SETTINGS_KEYS = ["mode", "fec", "pktLen", "callsign", "imageId", "quality", "huffman", "inFile", "outFile"];
 
 			function saveSettings() {
 				SETTINGS_KEYS.forEach((key) => {

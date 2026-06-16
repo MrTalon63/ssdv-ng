@@ -5,8 +5,8 @@ This is a stripped-down SSDV implementation optimized for embedding in CCSDS spa
 ## Quick Facts
 
 - **Packet Size**: 246 bytes (vs 256 standard)
-- **Header Size**: 13 bytes (vs 18 standard)
-- **Payload**: 233 bytes pure JPEG data (vs 202-224 standard)
+- **Header Size**: 14 bytes (vs 18 standard)
+- **Payload**: 232 bytes pure JPEG data (vs 202-224 standard)
 - **Removed**: Sync (0xD3), Callsign (4 bytes), CRC (4 bytes), FEC/RS codes (32 bytes)
 
 ## Usage
@@ -94,12 +94,13 @@ The modified `main.c` automatically detects packet size and handles both standar
 | ----------- | -----------: | ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 0-1         |            2 | `uint16_t`  | Image ID           | Big-endian (MSB, LSB)                                                                                                                    |
 | 2-4         |            3 | `uint32_t`  | Packet ID          | Big-endian (MSB, MID, LSB)                                                                                                               |
-| 5           |            1 | `uint8_t`   | Width              | width / 16                                                                                                                               |
-| 6           |            1 | `uint8_t`   | Height             | height / 16                                                                                                                              |
-| 7           |            1 | `uint8_t`   | Flags              | rhqqqexx: r = reserved (0), h = Huffman profile (0 = std, 1 = opt), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling |
-| 8-9         |            2 | `uint16_t`  | MCU offset         | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFFFF if none present                                        |
-| 10-12       |            3 | `uint32_t`  | MCU index (MCU ID) | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                           |
-| 13...       |          233 | `uint8_t[]` | Payload            | JPEG Payload Data                                                                                                                        |
+| 5           |            1 | `uint8_t`   | Width High         | (width / 16) >> 4 (high 8 bits of 12-bit width / 16)                                                                                     |
+| 6           |            1 | `uint8_t`   | Height High        | (height / 16) >> 4 (high 8 bits of 12-bit height / 16)                                                                                   |
+| 7           |            1 | `uint8_t`   | Width/Height Low   | wwww-hhhh (high 4 bits = low 4 bits of width / 16, low 4 bits = low 4 bits of height / 16)                                               |
+| 8           |            1 | `uint8_t`   | Flags              | rhqqqexx: r = reserved (0), h = Huffman profile (0 = std, 1 = opt), qqq = JPEG quality level (0-7 XOR 4), e = EOI flag, xx = subsampling |
+| 9-10        |            2 | `uint16_t`  | MCU offset         | Offset in bytes to the beginning of the first MCU block in the payload, or 0xFFFF if none present                                        |
+| 11-13       |            3 | `uint32_t`  | MCU index (MCU ID) | The number of the MCU pointed to by the offset above (big endian), or 0xFFFFFF if none present                                           |
+| 14...       |          232 | `uint8_t[]` | Payload            | JPEG Payload Data                                                                                                                        |
 
 ## Differences from Standard SSDV
 
@@ -110,8 +111,8 @@ The modified `main.c` automatically detects packet size and handles both standar
 | Callsign    | Yes (4 bytes)  | Yes (4 bytes) | No         |
 | CRC-32      | Yes (4 bytes)  | Yes (4 bytes) | No         |
 | RS Codes    | Yes (32 bytes) | No            | No         |
-| Header Size | 18 bytes       | 18 bytes      | 13 bytes   |
-| Payload     | 202 bytes      | 234 bytes     | 233 bytes  |
+| Header Size | 18 bytes       | 18 bytes      | 14 bytes   |
+| Payload     | 202 bytes      | 234 bytes     | 232 bytes  |
 | FEC Capable | Yes            | No            | No\*       |
 
 \*CCSDS mode relies on CCSDS packet-level error correction instead
@@ -120,7 +121,7 @@ The modified `main.c` automatically detects packet size and handles both standar
 
 Only JPEG files are supported, with the following limitations:
 
-- Width and height must be a multiple of 16 (up to a resolution of 4080 x 4080)
+- Width and height must be a multiple of 16 (up to a resolution of 65520 x 65520)
 - CCSDS packets have no error correction - rely on CCSDS transport layer
 - All packet data must be in order (no reordering/loss tolerance like standard SSDV)
 
